@@ -4,9 +4,9 @@ const app = express()
 app.use(express.json())
 
 let books = [
-  { "title": "Harry Potter", "author": "J.K Rowling", "isRead": true, "publishedYear": 1997 },
-  { "title": "Game of Thrones", "author": "George R.R Martin", "isRead": false, "publishedYear": 1996 },
-  { "title": "Rich Dad Poor Dad", "author": "Robert Kiyosaki", "isRead": true, "publishedYear": 1997 }
+  { "id": 0, "title": "Harry Potter", "author": "J.K Rowling", "isRead": true, "publishedYear": 1997 },
+  { "id": 1, "title": "Game of Thrones", "author": "George R.R Martin", "isRead": false, "publishedYear": 1996 },
+  { "id": 2, "title": "Rich Dad Poor Dad", "author": "Robert Kiyosaki", "isRead": true, "publishedYear": 1997 }
 ]
 
 function yearValidator(req, res, next) {
@@ -29,7 +29,7 @@ app.get('/books', (req, res) => {
 })
 
 app.post('/books', yearValidator, (req, res) => {
-  const newBook = req.body
+  const newBook = { id: books.length, ...req.body }
   books.push(newBook)
   res.json({ message: 'Book added!', books })
 })
