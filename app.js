@@ -12,6 +12,7 @@ const limiter = rateLimit({
   message: { error: 'Too many requests, slow down!' }
 })
 
+app.use (express.static("public"))
 app.use(express.json())
 app.use(morgan('dev'))
 app.use(helmet())
