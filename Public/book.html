@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookshelf API — My Books</title>
+  <meta name="description" content="Manage your personal bookshelf — add, view, and delete books.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* ── Modal backdrop ────────────────────────────── */
+    .modal-backdrop {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease;
+    }
+
+    .modal-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-backdrop.active .modal-content {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+
+    .modal-content {
+      transform: translateY(24px) scale(.97);
+      opacity: 0;
+      transition: transform .3s cubic-bezier(.22, 1, .36, 1), opacity .25s ease;
+    }
+
+    /* ── Card entrance animation ───────────────────── */
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(.96);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .card-animate {
+      animation: cardIn .4s cubic-bezier(.22, 1, .36, 1) both;
+    }
+
+    /* ── Delete shake ──────────────────────────────── */
+    @keyframes shake {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      20% {
+        transform: translateX(-4px);
+      }
+
+      40% {
+        transform: translateX(4px);
+      }
+
+      60% {
+        transform: translateX(-3px);
+      }
+
+      80% {
+        transform: translateX(3px);
+      }
+    }
+
+    .shake {
+      animation: shake .35s ease;
+    }
+
+    /* ── Toast ─────────────────────────────────────── */
+    @keyframes toastIn {
+      from {
+        transform: translateY(16px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes toastOut {
+      from {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      to {
+        transform: translateY(16px);
+        opacity: 0;
+      }
+    }
+
+    .toast {
+      animation: toastIn .3s ease forwards;
+    }
+
+    .toast.hide {
+      animation: toastOut .3s ease forwards;
+    }
+
+    /* ── Floating add button pulse ring ────────────── */
+    @keyframes pulse-ring {
+      0% {
+        transform: scale(.9);
+        opacity: .6;
+      }
+
+      100% {
+        transform: scale(1.5);
+        opacity: 0;
+      }
+    }
+
+    #fab-add::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 9999px;
+      background: inherit;
+      animation: pulse-ring 2s ease-out infinite;
+      z-index: -1;
+    }
+
+    /* ── Scroll bar polish ─────────────────────────── */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen">
+
+  <!-- ═══════ Top Navigation Bar ═══════ -->
+  <nav class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-slate-200/60 shadow-sm">
+    <div class="max-w-6xl mx-auto flex items-center justify-between px-6 py-3">
+      <a href="index.html" class="flex items-center gap-2 group">
+        <span class="text-2xl">📚</span>
+        <span
+          class="text-lg font-extrabold tracking-tight text-slate-800 group-hover:text-blue-600 transition">Bookshelf</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <span id="book-count-badge"
+          class="hidden text-xs font-semibold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full"></span>
+        <a href="index.html" class="text-sm text-slate-500 hover:text-blue-600 transition font-medium">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════ Page Header ═══════ -->
+  <header class="max-w-6xl mx-auto px-6 pt-10 pb-4">
+    <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">My Books</h1>
+    <p class="text-slate-500 mt-1 text-sm">Browse your collection, add new reads, or remove finished ones.</p>
+  </header>
+
+  <!-- ═══════ Cards Grid ═══════ -->
+  <main id="book-grid" class="max-w-6xl mx-auto px-6 pb-32 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Cards are injected here by JS -->
+  </main>
+
+  <!-- ═══════ Empty State ═══════ -->
+  <div id="empty-state" class="hidden max-w-6xl mx-auto px-6 text-center py-24">
+    <span class="text-6xl block mb-4">📖</span>
+    <p class="text-slate-400 text-lg font-medium">No books yet — add your first one!</p>
+  </div>
+
+  <!-- ═══════ Loading Skeleton ═══════ -->
+  <div id="loading-state" class="max-w-6xl mx-auto px-6 pb-32 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="h-44 rounded-2xl bg-white/60 animate-pulse"></div>
+    <div class="h-44 rounded-2xl bg-white/60 animate-pulse delay-75"></div>
+    <div class="h-44 rounded-2xl bg-white/60 animate-pulse delay-150"></div>
+  </div>
+
+  <!-- ═══════ Floating Add Button (FAB) ═══════ -->
+  <button id="fab-add"
+    class="fixed bottom-8 right-8 z-40 w-14 h-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-lg shadow-blue-500/30 flex items-center justify-center text-3xl font-light hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+    aria-label="Add a book">+</button>
+
+  <!-- ═══════ Modal Backdrop ═══════ -->
+  <div id="modal-backdrop"
+    class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+    <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
+
+      <button id="modal-close"
+        class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition text-xl leading-none cursor-pointer">&times;</button>
+
+      <h2 class="text-xl font-bold text-slate-800 mb-5">Add a New Book</h2>
+
+      <form id="add-book-form" class="space-y-4">
+        <div>
+          <label for="input-title" class="block text-sm font-medium text-slate-600 mb-1">Title</label>
+          <input id="input-title" type="text" required placeholder="e.g. The Great Gatsby"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition text-sm" />
+        </div>
+        <div>
+          <label for="input-author" class="block text-sm font-medium text-slate-600 mb-1">Author</label>
+          <input id="input-author" type="text" required placeholder="e.g. F. Scott Fitzgerald"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition text-sm" />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="input-year" class="block text-sm font-medium text-slate-600 mb-1">Published Year</label>
+            <input id="input-year" type="number" required placeholder="1925" min="0" max="2099"
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition text-sm" />
+          </div>
+          <div>
+            <label for="input-read" class="block text-sm font-medium text-slate-600 mb-1">Read?</label>
+            <select id="input-read" required
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition text-sm">
+              <option value="true">Yes — I've read it</option>
+              <option value="false" selected>No — not yet</option>
+            </select>
+          </div>
+        </div>
+
+        <p id="form-error" class="text-red-500 text-xs font-medium hidden"></p>
+
+        <button id="submit-btn" type="submit"
+          class="w-full mt-2 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-semibold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:brightness-110 active:scale-[.98] transition-all text-sm cursor-pointer">
+          Add Book
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════ Toast Container ═══════ -->
+  <div id="toast-container"
+    class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none"></div>
+
+  <!-- ═══════ JavaScript ═══════ -->
+  <script>
+    const API = '/books';
+
+    // ── DOM refs ────────────────────────────────────
+    const grid = document.getElementById('book-grid');
+    const emptyState = document.getElementById('empty-state');
+    const loadState = document.getElementById('loading-state');
+    const badge = document.getElementById('book-count-badge');
+    const backdrop = document.getElementById('modal-backdrop');
+    const form = document.getElementById('add-book-form');
+    const formError = document.getElementById('form-error');
+    const fabAdd = document.getElementById('fab-add');
+    const modalClose = document.getElementById('modal-close');
+    const submitBtn = document.getElementById('submit-btn');
+    const toastBox = document.getElementById('toast-container');
+
+    // ── Color palette for cards (rotates) ──────────
+    const palette = [
+      { bg: 'bg-gradient-to-br from-blue-50 to-indigo-50', border: 'border-blue-200/60', badge: 'bg-blue-100 text-blue-700', icon: '📘' },
+      { bg: 'bg-gradient-to-br from-amber-50 to-orange-50', border: 'border-amber-200/60', badge: 'bg-amber-100 text-amber-700', icon: '📙' },
+      { bg: 'bg-gradient-to-br from-emerald-50 to-teal-50', border: 'border-emerald-200/60', badge: 'bg-emerald-100 text-emerald-700', icon: '📗' },
+      { bg: 'bg-gradient-to-br from-rose-50 to-pink-50', border: 'border-rose-200/60', badge: 'bg-rose-100 text-rose-700', icon: '📕' },
+      { bg: 'bg-gradient-to-br from-violet-50 to-purple-50', border: 'border-violet-200/60', badge: 'bg-violet-100 text-violet-700', icon: '📓' },
+    ];
+
+    // ── Toast helper ───────────────────────────────
+    function toast(msg, type = 'success') {
+      const colors = type === 'success'
+        ? 'bg-emerald-600 text-white'
+        : 'bg-red-500 text-white';
+      const el = document.createElement('div');
+      el.className = `toast px-5 py-2.5 rounded-full text-sm font-medium shadow-lg pointer-events-auto ${colors}`;
+      el.textContent = msg;
+      toastBox.appendChild(el);
+      setTimeout(() => { el.classList.add('hide'); setTimeout(() => el.remove(), 350); }, 2800);
+    }
+
+    // ── Render a single card ───────────────────────
+    function buildCard(book, idx) {
+      const c = palette[idx % palette.length];
+      const card = document.createElement('div');
+      card.className = `group relative ${c.bg} ${c.border} border rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col`;
+      card.dataset.id = book.id;
+
+      card.innerHTML = `
+        <!-- Card Header -->
+        <div class="flex items-center justify-between px-5 pt-4 pb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">${c.icon}</span>
+            <span class="text-xs font-semibold ${c.badge} px-2.5 py-0.5 rounded-full">${book.publishedYear}</span>
+          </div>
+          <button data-delete="${book.id}" aria-label="Delete book"
+            class="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500 text-lg leading-none cursor-pointer">&times;</button>
+        </div>
+
+        <!-- Card Body -->
+        <div class="px-5 py-3 flex-1">
+          <h3 class="font-bold text-slate-800 text-base leading-snug line-clamp-2">${escapeHtml(book.title)}</h3>
+          <p class="mt-1.5 text-sm text-slate-500">by ${escapeHtml(book.author)}</p>
+        </div>
+
+        <!-- Card Footer -->
+        <div class="px-5 pb-4 pt-2 border-t ${c.border} flex items-center justify-between">
+          <span class="text-xs font-medium px-2.5 py-1 rounded-full ${book.isRead ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+            ${book.isRead ? '✓ Read' : '○ Unread'}
+          </span>
+          <span class="text-[11px] text-slate-400 font-medium">ID #${book.id}</span>
+        </div>
+      `;
+      return card;
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    // ── Render all cards ───────────────────────────
+    function renderBooks(books) {
+      grid.innerHTML = '';
+      loadState.classList.add('hidden');
+      if (!books.length) {
+        emptyState.classList.remove('hidden');
+        badge.classList.add('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+      badge.textContent = `${books.length} book${books.length !== 1 ? 's' : ''}`;
+      badge.classList.remove('hidden');
+      books.forEach((b, i) => grid.appendChild(buildCard(b, i)));
+    }
+
+    // ── Fetch books ────────────────────────────────
+    async function loadBooks() {
+      try {
+        const res = await fetch(API);
+        if (!res.ok) throw new Error('Failed to load');
+        const books = await res.json();
+        renderBooks(books);
+      } catch (e) {
+        loadState.classList.add('hidden');
+        toast('Could not load books', 'error');
+      }
+    }
+
+    // ── Delete a book ──────────────────────────────
+    async function deleteBook(id) {
+      try {
+        const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        const data = await res.json();
+        toast('Book removed');
+        renderBooks(data.books);
+      } catch (e) {
+        toast('Could not delete book', 'error');
+      }
+    }
+
+    // ── Add a book ─────────────────────────────────
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formError.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Adding…';
+
+      const payload = {
+        title: document.getElementById('input-title').value.trim(),
+        author: document.getElementById('input-author').value.trim(),
+        publishedYear: Number(document.getElementById('input-year').value),
+        isRead: document.getElementById('input-read').value === 'true',
+      };
+
+      try {
+        const res = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const msg = data.errors ? data.errors.map(e => e.msg).join(', ') : (data.error || 'Validation error');
+          throw new Error(msg);
+        }
+        toast(`"${payload.title}" added!`);
+        renderBooks(data.books);
+        closeModal();
+        form.reset();
+      } catch (err) {
+        formError.textContent = err.message;
+        formError.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Book';
+      }
+    });
+
+    // ── Delete delegation ──────────────────────────
+    grid.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-delete]');
+      if (btn) deleteBook(Number(btn.dataset.delete));
+    });
+
+    // ── Modal open / close ─────────────────────────
+    function openModal() {
+      formError.classList.add('hidden');
+      backdrop.classList.add('active');
+      document.getElementById('input-title').focus();
+    }
+    function closeModal() {
+      backdrop.classList.remove('active');
+    }
+
+    fabAdd.addEventListener('click', openModal);
+    modalClose.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+    // ── Init ───────────────────────────────────────
+    loadBooks();
+  </script>
+
+</body>
+
+</html>
